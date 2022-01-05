@@ -1,0 +1,60 @@
+version: "3"
+
+networks:
+  nominatim:
+    driver: bridge
+
+services:
+    nominatim:
+        container_name: nominatim
+        image: mediagis/nominatim:4.0
+        restart: unless-stopped
+        ports:
+            - "9080:8080"
+            - "9081:5432"
+        environment:
+            # see https://github.com/mediagis/nominatim-docker/tree/master/4.0#configuration for more options
+            PBF_URL: https://download.geofabrik.de/europe/germany/nordrhein-westfalen-latest.osm.pbf
+            REPLICATION_URL: https://download.geofabrik.de/europe/germany/nordrhein-westfalen-updates
+            #PBF_URL: https://download.geofabrik.de/europe/germany/nordrhein-westfalen/duesseldorf-regbez-latest.osm.pbf
+            #REPLICATION_URL: https://download.geofabrik.de/europe/germany/nordrhein-westfalen/duesseldorf-regbez-updates
+            NOMINATIM_PASSWORD: password
+            POSTGRES_SHARED_BUFFERS: 4GB
+            IMPORT_STYLE: full
+        volumes:
+            - nominatim-data:/var/lib/postgresql/12/main
+        networks:
+            - nominatim
+        shm_size: 8gb
+        #tty: true
+        #command: >
+        #    bash -c "echo 'Nominatim initialized'
+        #    && tail -f /dev/null"
+        
+    photon:
+        container_name: photon
+        build:
+          context: .
+          dockerfile: Dockerfile
+        image: photon:latest
+        restart: unless-stopped
+        depends_on:
+            - nominatim
+        ports:
+            - "2322:2322" # photon API
+            - "9200:9200" #Elasticsearch
+        environment:
+            NOMINATIM_DB_HOST: localhost
+            NOMINATIM_DB_PORT: 5432
+            NOMINATIM_DB_NAME: nominatim
+            NOMINATIM_DB_USER: nominatim
+            NOMINATIM_DB_PASSWORD: password
+            NOMINATIM_LANGUAGES: de,en
+        volumes:
+            - ./target/photon-data:/app/photon_data # mounts existing data dir into photon container
+        networks:
+            - nominatim
+
+volumes:
+    nominatim-data:
+#    photon-data:
